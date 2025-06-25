@@ -1,16 +1,19 @@
 # AS
-- Estimate AS severity from 6 different TTE views
-    - 
+- Estimate AS severity from 6 different TTE views.
 
 ## how to use
-0. `git clone https://github.com/echonet/AS.git && cd AS && git clone https://github.com/echonet/cvair.git`
-1. create a `MANIFEST_CSV` file that has the following columns
+0. Setup
+```bash
+git clone https://github.com/echonet/AS.git
+cd AS
+git clone https://github.com/echonet/cvair.git
+```
+1. create a `MANIFEST_CSV` file for each each view that has the following columns
     - file_uid
     - study_uid
     - view
+    - view_probability
     - MRN: patients id
-    - frames
-    - fps
     - split: "test"
     - path_column: path to the videoes
     - AS_severity:
@@ -21,9 +24,9 @@
         - 4: moderate~severe
         - 5: severe
 
-2. get weights from [https://github.com/echonet/AS/releases/tag/v0.1.0](https://github.com/echonet/AS/releases/tag/v0.1.0) and save them to `./weights`.
-3. Each view (e.g., PLAX, PSAX, Apical) has its own specific pretrained weight file in the weights folder.
-4. Based on the view classifier, the following views need to be included:
+2. get weights from [https://github.com/echonet/AS/releases/tag/v0.1.0](https://github.com/echonet/AS/releases/tag/v0.1.0) and save them to `./weights` so that each view (e.g., PLAX, PSAX, Apical, ...) model has its own specific pretrained weight file in the `weights` directory.
+
+3. Based on the view classifier, the following views need to be included:
     - PLAX: "PLAX_Zoom_out", "PLAX_AV_MV", "PLAX", "PLAX_zooomed_AV"
     - PSAX: "PSAX_(level_great_vessels)_zoomed_AV", "PSAX_(level_great_vessels)"
     - Apical: "A3C", "A5C"
@@ -33,11 +36,12 @@
 
 ## example usage
 ```
+# 
 python predict.py \
-    --manifest_path PATH_TO_MANIFEST_CSV \
+    --manifest_path PATH_TO_PLAX_MANIFEST_CSV \
     --view PLAX \
     --path_column path_column \
     --batch_size 64 \
     --targets AS_severity
 ```
-
+- output_file is saved to: `./predictions/{view}.csv`

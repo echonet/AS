@@ -3,3 +3,4 @@ predictions/
 cvair/
 lightning_logs/
 weights/*.pt
+!weights/.gitkeep

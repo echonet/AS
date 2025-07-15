@@ -71,6 +71,12 @@ def model_summary(models):
                 {"model": model.replace(phenotype+'_', ''), "level": "image", "n_cls": n, **img_metrics(df, n)},
                 {"model": model.replace(phenotype+'_', ''), "level": "study", "n_cls": n, **study_metrics(df, n)},
             ]
+    df = pd.concat([pd.read_csv(PRED_DIR / f"{model}.csv", low_memory=False) for model in models if (PRED_DIR / f"{model}.csv").exists()])
+    for n in (6, 4):
+        rows += [
+            {"model": "all", "level": "image", "n_cls": n, **img_metrics(df, n)},
+            {"model": "all", "level": "study", "n_cls": n, **study_metrics(df, n)},
+        ]
     return pd.DataFrame(rows)
 
 if __name__ == "__main__":

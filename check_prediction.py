@@ -5,7 +5,7 @@ from pathlib import Path
 
 PRED_DIR = Path("./predictions").resolve()
 models = ["PLAX", "PSAX", "Apical", "PLAX_D", "PSAX_D", "Apical_D"]
-phenotype = 'av_stenosis'
+phenotype = 'AS_severity'
 logit_cols = [
     "no_preds", "mild_preds", "mild~moderate_preds",
     "moderate_preds", "moderate~severe_preds", "severe_preds",

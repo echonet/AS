@@ -36,12 +36,17 @@ git clone https://github.com/echonet/cvair.git
 
 ## example usage
 ```
-# 
+# inference
 python predict.py \
     --manifest_path PATH_TO_PLAX_MANIFEST_CSV \
     --view PLAX \
     --path_column path_column \
     --batch_size 64 \
     --targets AS_severity
+
+# check metrics
+python check_prediction.py
+
 ```
-- output_file is saved to: `./predictions/{view}.csv`
+- output_file will be saved to: `./predictions/{view}.csv`
+- metrics will be saved to `./predictions/model_summary.csv`

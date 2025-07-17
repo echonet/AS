@@ -1,4 +1,5 @@
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -79,9 +80,53 @@ def model_summary(models):
         ]
     return pd.DataFrame(rows)
 
+def plot_cm(y, prob, class_names=None, title=None):
+    if class_names is None:
+        class_names=['class_' + str(i) for i in range(prob.shape[1])]
+    if title is None: title = "Confusion Matrix"
+    n_classes = prob.shape[1]
+    labels = np.arange(n_classes)
+    cm = confusion_matrix(y, prob.argmax(1), labels=labels)
+    row_sums = cm.sum(axis=1, keepdims=True)
+    # Avoid division by zero for empty rows
+    cm_norm = np.divide(cm.astype(float), row_sums, where=row_sums != 0)
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    disp.plot(
+        ax=ax,
+        cmap="Greens",
+        xticks_rotation=45,
+        values_format="d",
+        colorbar=False
+    )
+    disp.im_.set_data(cm_norm)
+    disp.im_.set_norm(plt.Normalize(vmin=0, vmax=1))
+
+    cbar = fig.colorbar(disp.im_, ax=ax, fraction=0.05)
+    cbar.set_label("Row-wise frequency")
+
+    plt.title(title, fontsize=10)
+    plt.tight_layout()
+    return fig
+
+
 if __name__ == "__main__":
     # Example usage
     print("Model Summary:")
     summary_df = model_summary(models)
     print(summary_df)
     summary_df.to_csv(PRED_DIR / "model_summary.csv", index=False)
+
+    # confusion matrix
+    df = pd.concat([pd.read_csv(PRED_DIR / f"{model}.csv", low_memory=False) for model in models if (PRED_DIR / f"{model}.csv").exists()])
+    df[logit_cols] = softmax(df[logit_cols].astype(np.float32).to_numpy())
+    gb = df.groupby("study_uid")
+    p6 = gb[logit_cols].mean().to_numpy()
+
+    p = collapse4(p6)
+    y6 = gb[phenotype].max().to_numpy()
+    y = np.vectorize(true_map.get)(y6)
+
+    fig = plot_cm(y, p, class_names=["No AS", "Mild", "Moderate", "Severe"], title=f"Confusion Matrix")
+    fig.savefig(PRED_DIR / f"confusion_matrix.png")

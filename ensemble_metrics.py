@@ -14,6 +14,7 @@ true_map = {0: 0, 1: 1, 2: 2, 3: 2, 4: 3, 5: 3}
 logit_cols = ["no_preds", "mild_preds", "mild~moderate_preds", "moderate_preds", "moderate~severe_preds", "severe_preds"]
 prob_cols = ["no_p", "mild_p", "mild_mod_p", "mod_p", "mod_sev_p", "sev_p"]
 phenotype = 'AS_severity'
+# peakav_df = pd.read_csv('./peakav.csv', dtype={'study_uid': str, 'peakav': float}) # Uncomment this above line if you have a peakav.csv file
 
 def main():
     dfs = [pd.read_csv(f"./predictions/{m}.csv", dtype={'study_uid': str}, low_memory=False).assign(model=m).drop_duplicates() for m in models]
@@ -27,6 +28,8 @@ def main():
     wide.columns = [f"{mdl}_{col}" for col, mdl in wide.columns]
 
     wide.loc[:,'peakav'] = np.nan # change this to the actual peakav values if available
+    # wide = wide.merge(peakav_df.set_index('study_uid'), left_index=True, right_index=True, how='left') 
+
     with open('./weights/av_stenosis_peakav.pkl', 'rb') as f:
         ens = pickle.load(f)
     prob = ens.predict_proba(wide.to_numpy())

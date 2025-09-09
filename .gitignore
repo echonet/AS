@@ -1,7 +1,6 @@
 manifest*
 predictions/
 cvair/
-lightning_logs/
 weights/*
 !weights/.gitkeep
 ensemble.ipynb
@@ -9,3 +8,4 @@ test_dcm/*
 ensemble_metrics.py
 check_prediction.py
 test.ipynb
+tmp/

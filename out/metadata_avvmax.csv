@@ -1,0 +1,3 @@
+filepath,filename,studyid,measurement_name,PhotometricInterpretation,ultrasound_color_data_present,PhysicalDeltaY,y0,horizontal_line,predicted_x,predicted_y,peak_velocity,height,width
+./test_dcm/study_000/AV_doppler/6E8GJ50P.dcm,6E8GJ50P.dcm,study_000,avvmax,RGB,1,1.085897327307703,342,120,243,582,130.31,768,1024
+./test_dcm/study_000/AV_doppler/6E8GJ52S.dcm,6E8GJ52S.dcm,study_000,avvmax,MONOCHROME2,0,0.48505281406224815,342,120,276,661,96.53,768,1024

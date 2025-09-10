@@ -93,7 +93,7 @@ The final output is the probability of **four severity classes** per study:
     ```
 
     - the output will be saved to `./predictions/metadata_avvmax.csv`
-    
+    <br><br>
 
     2. **Run six-view specific models**
     ```

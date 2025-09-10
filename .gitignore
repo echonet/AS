@@ -1,8 +1,7 @@
 manifest*
 predictions/
 cvair/
-weights/*
-!weights/.gitkeep
+weights/*pt
 ensemble.ipynb
 test_dcm/*
 ensemble_metrics.py

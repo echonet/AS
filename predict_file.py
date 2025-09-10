@@ -13,14 +13,15 @@ import pickle
 
 
 """
-    This script takes in a user-specified path to a directory of A4C DICOMs. Predictions 
-    are saved as a csv file in the directory that the script is run from. 
-    The predictions file has 3 columns: 
-        1. filename - name of the DICOM file 
+    This script takes in a user-specified path to a directory of DICOMs.
+    Predictions will be saved as csv files in the `predictions` directory.
+    The view-specific predictions files will be named `predictions_{view}.csv`.
+    The ensemble study-level predictions file will be named `ensemble_predictions.csv`.
+    The predictions file has 3 columns:
+        1. filename - name of the DICOM file
         2. prediction - sigmoided output of the model
 """
 
-NEURON_NAMES = ["no", "mild", "mild~moderate", "moderate", "moderate~severe", "severe"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, required=True)
@@ -29,17 +30,12 @@ parser.add_argument("--batch_size", type=int, default=4)
 args = parser.parse_args()
 
 data_dir = Path(args.data_dir)
-# PLAX_path = Path(args.PLAX_path) if args.PLAX_path is not None else None
-# PSAX_path = Path(args.PSAX_path) if args.PSAX_path is not None else None
-# Apical_path = Path(args.Apical_path) if args.Apical_path is not None else None
-# PLAX_D_path = Path(args.PLAX_D_path) if args.PLAX_D_path is not None else None
-# PSAX_D_path = Path(args.PSAX_D_path) if args.PSAX_D_path is not None else None
-# Apical_D_path = Path(args.Apical_D_path) if args.Apical_D_path is not None else None
 weights_dir = Path(args.weights_dir)
 
+NEURON_NAMES = ["no", "mild", "mild~moderate", "moderate", "moderate~severe", "severe"]
 models = ['PLAX', 'PSAX', 'Apical', 'PLAX_D', 'PSAX_D', 'Apical_D']
+classes_4 = ['no', 'mild', 'moderate', 'severe']
 
-all_results = {}
 
 class InferenceDataset(torch.utils.data.Dataset):
     def __init__(self, data_paths: Path):
@@ -55,14 +51,6 @@ class InferenceDataset(torch.utils.data.Dataset):
 
 print('Starting inference...')
 
-if (data_dir/f"AV_doppler").exists() and (len(list((data_dir/"AV_doppler").iterdir())) > 0):
-    print(f"number of DICOMs AV_doppler:\t{len(list((data_dir/'AV_doppler').iterdir()))}")
-
-else:
-    print(f"No AV_doppler DICOMs found, skipping...")
-
-
-
 for view in models:
     print(f"\nRunning inference for view: {view}")
 
@@ -75,16 +63,18 @@ for view in models:
             
     else:
         print(f"No DICOMs found for {view}, skipping...")
-        pred_dict = {}
-        pred_dict["model"] = [view]
-        pred_dict['studyid'] = ['NA']
-        pred_dict["filename"] = ['NA']
+        studies = [d.name for d in data_dir.iterdir() if d.is_dir()]
+        pred_dict = {
+            'model': [view]*len(studies),
+            'studyid': studies,
+            'filename': ['NA']*len(studies)
+        }
         for n in NEURON_NAMES:
-            pred_dict[n] = [np.nan]
-        for k,v in pred_dict.items():
-            if k not in all_results:
-                all_results[k] = []
-            all_results[k].extend(v)
+            pred_dict[n] = [np.nan]*len(studies)
+
+        # save empty predictions to file for ensembling later
+        os.makedirs("predictions", exist_ok=True)
+        pd.DataFrame(pred_dict).to_csv(f"predictions/predictions_{view}.csv", index=None)
         continue
 
 
@@ -131,27 +121,31 @@ for view in models:
         os.makedirs("predictions", exist_ok=True)
         dataframe.to_csv(f"predictions/predictions_{view}.csv", index=None)
 
-    for k,v in pred_dict.items():
-        if k not in all_results:
-            all_results[k] = []
-        all_results[k].extend(v)
-# print(all_results)
 
-df = pd.DataFrame(all_results)
-
-agg = df.groupby(['model', 'StudyID'])[NEURON_NAMES].mean()
-wide = agg.unstack('model')
-
+# ensemble results from all views
+print("\nEnsembling results from all views...")
+dfs = [pd.read_csv(f"./predictions/predictions_{m}.csv", dtype={'study_uid': str}, low_memory=False).drop_duplicates() for m in models]
+df = pd.concat(dfs, ignore_index=True)
+agg = df.groupby(["studyid", "model"])[NEURON_NAMES].mean()
+wide = agg.unstack("model")
 wide.columns = [f"{mdl}_{col}" for col, mdl in wide.columns]
-wide.loc[:,'peakav'] = np.nan
 
-print(wide)
+# merge peakav prediction
+d = pd.read_csv('./predictions/metadata_avvmax.csv')
+tmp = d.groupby(['studyid'])['peak_velocity'].mean()
+wide = wide.merge(tmp, on='studyid', how='left')
+wide.rename(columns={'peak_velocity':'peakav'}, inplace=True)
 
+
+# load ensemble model
 with open('./weights/av_stenosis_peakav.pkl', 'rb') as f:
     ens = pickle.load(f)
-
 prob = ens.predict_proba(wide.to_numpy())
-print(prob)
+wide[classes_4] = prob
+wide["final_pred_class"] = wide[classes_4].idxmax(axis=1)
 
-# add ensemble predictions to all_results
+print("\nSample ensemble predictions:")
+print(wide[classes_4 + ["final_pred_class"]].head())
 
+wide.to_csv(f"./predictions/ensemble_predictions.csv", index=True)
+print("\nSaved ensemble predictions to ./predictions/ensemble_predictions.csv")

@@ -8,3 +8,5 @@ ensemble_metrics.py
 check_prediction.py
 test.ipynb
 tmp/
+.gitignore
+__pycache__/

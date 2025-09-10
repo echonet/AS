@@ -7,7 +7,7 @@ from pathlib import Path
 import tqdm
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from utils import load_model, dicom_to_tensor
+from utils import load_model, dicom_to_tensor, mask_outside_ultrasound
 import os
 import pickle
 
@@ -46,7 +46,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         return len(self.files)
 
     def __getitem__(self, idx):
-        return self.files[idx].parents[1].name, self.files[idx].name, dicom_to_tensor(self.files[idx])
+        return self.files[idx].parents[1].name, self.files[idx].name, mask_outside_ultrasound(dicom_to_tensor(self.files[idx]))
 
 
 print('Starting inference...')
@@ -58,8 +58,8 @@ for view in models:
         print(f"Found DICOMs dir for view: {view}")
         weights_path = weights_dir/f"{view}.pt"
 
-        print(f"number of files {view}:\t{len(list(data_dir.glob(f"*/{view}/*")))}")
-        print(f"number of studies {view}:\t{len(list(data_dir.glob(f"*/{view}")))}")
+        print(f"number of files {view}:\t{len(list(data_dir.glob(f'*/{view}/*')))}")
+        print(f"number of studies {view}:\t{len(list(data_dir.glob(f'*/{view}')))}")
             
     else:
         print(f"No DICOMs found for {view}, skipping...")

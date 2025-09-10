@@ -10,3 +10,6 @@ test.ipynb
 tmp/
 .gitignore
 __pycache__/
+_test_dcm/*
+test_avi/*
+test_dcm_avi/*

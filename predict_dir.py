@@ -5,20 +5,17 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import tqdm
-import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from utils import load_model, dicom_to_tensor, mask_outside_ultrasound, write_to_avi, read_video, crop_and_scale
+from utils import load_model, mask_outside_ultrasound, write_to_avi, read_video, crop_and_scale
 import os
 import pickle
 from typing import Tuple, Union, List
-from numpy.typing import ArrayLike
-
 import pydicom
-
 
 
 """
     This script takes in a user-specified path to a directory of DICOMs.
+    The dicom files will be converted to avi and saved in a directory named `avis` in the current working directory.
     Predictions will be saved as csv files in the `predictions` directory.
     The view-specific predictions files will be named `predictions_{view}.csv`.
     The ensemble study-level predictions file will be named `ensemble_predictions.csv`.
@@ -30,7 +27,7 @@ import pydicom
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, required=True)
-parser.add_argument("--weights_dir", type=str, required=True)
+parser.add_argument("--weights_dir", type=str, default="./weights")
 parser.add_argument("--batch_size", type=int, default=4)
 args = parser.parse_args()
 batch_size = args.batch_size
@@ -196,9 +193,7 @@ for view in models:
         continue
 
 
-    ### Create Pytorch dataset from user-inputted directory of DICOM files
-    ### Convert each DICOM to tensor as input to model
-
+    # Convert DICOMs to AVIs
     data_path = list(data_dir.glob(f"*/{view}"))
     dcm_paths = [str(file) for f in data_path for file in f.glob('*')]
     studyids = [file.parent.parent.name for f in data_path for file in f.glob('*')]
@@ -206,13 +201,12 @@ for view in models:
 
     print('Converting DICOMs to AVIs...')
     for dcm, avi in zip(dcm_paths, avi_paths):
-        print(dcm)
-        print(avi)
         ds = pydicom.dcmread(str(dcm))
         masked_pixel_array = mask_outside_ultrasound(ds.pixel_array)
         Path(avi).parent.mkdir(parents=True, exist_ok=True)
         write_to_avi(masked_pixel_array, avi, fps=30)
 
+    # Create manifest file for dataloader
     manifest_d = {
         "filename": avi_paths,
         "dcm_path": dcm_paths,
@@ -223,6 +217,7 @@ for view in models:
     manifest_path = f"./manifest/{view}.csv"
     pd.DataFrame(manifest_d).to_csv(f"./manifest/{view}.csv", index=None)
 
+    ### Set up dataset
     test_ds = EchoDataset(
         split="test",
         data_path='.',
@@ -253,22 +248,20 @@ for view in models:
             studyids.extend(batch_studyids)
 
         predictions = torch.cat(predictions, dim=0).T  # num_neurons x num_samples
+
         ### Create dataframe with columns for filename and predictions
         pred_dict = {"filename": filenames, "dcm_path": dcm_paths, "studyid": studyids}
-
-
         for key, value in zip(NEURON_NAMES, predictions):
             pred_dict[key] = value
-    
 
         pred_dict["model"] = [view]*predictions.shape[1]
-        # print(pred_dict)
+
         dataframe = pd.DataFrame(pred_dict)
+
         ### Save predictions to file
         os.makedirs("predictions", exist_ok=True)
         dataframe.to_csv(f"predictions/predictions_{view}.csv", index=None)
-        print(dataframe)
-
+        print(f"Saved {view} model predictions to ./predictions/predictions_{view}.csv")
 
 # ensemble results from all views
 print("\nEnsembling results from all views...")
@@ -278,12 +271,22 @@ agg = df.groupby(["studyid", "model"])[NEURON_NAMES].mean()
 wide = agg.unstack("model")
 wide.columns = [f"{mdl}_{col}" for col, mdl in wide.columns]
 
-# merge peakav prediction
-d = pd.read_csv('./predictions/metadata_avvmax.csv')
-tmp = d.groupby(['studyid'])['peak_velocity'].mean()
-wide = wide.merge(tmp, on='studyid', how='left')
-wide.rename(columns={'peak_velocity':'peakav'}, inplace=True)
+# merge peakav prediction from avvmax model
+# peakav prediction file is generated from a separate script and should be placed in ./predictions/metadata_avvmax.csv
+# the file should have columns: studyid, peak_velocity
+peakav_path = './predictions/metadata_avvmax.csv'
+if not os.path.exists(peakav_path):
+    print(f"Peak AV velocity prediction file not found at {peakav_path}.")
+    print("Ensemble will proceed without peak AV velocity.")
+    wide['peakav'] = np.nan
+else:
+    print(f"Loading peak AV velocity predictions from {peakav_path}.")
+    d = pd.read_csv('./predictions/metadata_avvmax.csv')
 
+    # calculate mean peak velocity if multiple AV doppler clips per study
+    tmp = d.groupby(['studyid'])['peak_velocity'].mean()
+    wide = wide.merge(tmp, on='studyid', how='left')
+    wide.rename(columns={'peak_velocity':'peakav'}, inplace=True)
 
 # load ensemble model
 with open('./weights/av_stenosis_peakav.pkl', 'rb') as f:

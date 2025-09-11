@@ -29,10 +29,10 @@ The final output is the probability of **four severity classes** per study:
     and install required packages in requirements.txt
 
 1. prepare data
-    - The input data is assumed to be **DICOM files**, organized by `study_id`.  
-    - Each study directory contains **six echocardiographic views** (PLAX, PSAX, Apical and their color-Dopplers) and Doppler image for peak AV velocity measurement (`AV_doppler`, CW doppler image).
-
-    Example directory structure:
+    - The input data is assumed to be **DICOM files**, organized by `studyid`.  
+    - Each study directory contains **six echocardiographic views** (PLAX, PSAX, Apical and their color-Dopplers) and CW Doppler still image for peak AV velocity measurement (`AV_doppler`).
+        - `./data_dir/{studyid}/{view}/DICOMS`
+    - Example directory structure:
     ```
     test_dcm/
     ├── study_001/
@@ -68,7 +68,8 @@ The final output is the probability of **four severity classes** per study:
     │   ├── Apical_D/
     │   │   └── file17.dcm
     │   └── AV_doppler/
-    │       └── file10.dcm
+    │       └── file18.dcm
+    .....
     ```
 
 2. Based on the view classifier, the following view names are expected
@@ -101,9 +102,10 @@ The final output is the probability of **four severity classes** per study:
     ```
     
 5. Output
-    - Predictions will be saved as csv files in the `predictions` directory.
+    - Predictions will be saved as csv files in the `./predictions` directory.
     - Peak AV velocity prediction file will be named `metadata_avvmax.csv`
     - The view-specific predictions files will be named `predictions_{view}.csv`.
+    - The `avi` files will be saved at `./avis/{studyid}/{view}`
     - The final study-level predictions file will be named `ensemble_predictions.csv`.
         - column `final_pred_class` is the final prediction of 'no/mild/moderate/severe'
         - the columns `no`, `mild`, `moderate`, and `severe` are the probabilities.

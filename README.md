@@ -97,7 +97,7 @@ The final output is the probability of **four severity classes** per study:
 
     2. **Run six-view specific models**
     ```
-    python predict_file.py --data_dir ./test_dcm --weights_dir ./weights/
+    python predict_dir.py --data_dir ./test_dcm --weights_dir ./weights/
     ```
     
 5. Output

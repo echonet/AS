@@ -12,6 +12,10 @@ import pydicom
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from pydicom.pixel_data_handlers.util import convert_color_space, apply_voi_lut
+from numpy.typing import ArrayLike
+
+
 
 from scipy.signal import savgol_filter, find_peaks
 
@@ -466,3 +470,114 @@ def mask_outside_ultrasound(original_pixels: np.array) -> np.array:
     except Exception as e:
         print("Error masking returned as is.")
         return vid
+
+def read_video(
+    path: Union[str, Path],
+    n_frames: int = None,
+    sample_period: int = 1,
+    out_fps: float = None,  # Output fps
+    fps: float = None,  # input fps of video (default to avi metadata)
+    frame_interpolation: bool = True,
+    random_start: bool = False,
+    res: Tuple[int] = None,  # (width, height)
+    interpolation=cv2.INTER_CUBIC,
+    zoom: float = 0):
+
+    # Check path
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    # Get video properties
+    cap = cv2.VideoCapture(str(path))
+    vid_size = (
+        int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+        int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+        int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+    )
+    if fps is None:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+    if out_fps is not None:
+        sample_period = 1
+        # Figuring out how many frames to read, and at what stride, to achieve the target
+        # output FPS if one is given.
+        if n_frames is not None:
+            out_n_frames = n_frames
+            n_frames = int(np.ceil((n_frames - 1) * fps / out_fps + 1))
+        else:
+            out_n_frames = int(np.floor((vid_size[0] - 1) * out_fps / fps + 1))
+
+    # Setup output array
+    if n_frames is None:
+        n_frames = vid_size[0] // sample_period
+    if n_frames * sample_period > vid_size[0]:
+        raise Exception(
+            f"{n_frames} frames requested (with sample period {sample_period}) but video length is only {vid_size[0]} frames"
+        )
+    if res is None:
+        out = np.zeros((n_frames, *vid_size[1:], 3), dtype=np.uint8)
+    else:
+        out = np.zeros((n_frames, res[1], res[0], 3), dtype=np.uint8)
+
+    # Read video, skipping sample_period frames each time
+    if random_start:
+        si = np.random.randint(vid_size[0] - n_frames * sample_period + 1)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, si)
+    for frame_i in range(n_frames):
+        _, frame = cap.read()
+        if res is not None:
+            frame = crop_and_scale(frame, res, interpolation, zoom)
+        out[frame_i] = frame
+        for _ in range(sample_period - 1):
+            cap.read()
+    cap.release()
+
+    # if a particular output fps is desired, either get the closest frames from the input video
+    # or interpolate neighboring frames to achieve the fps without frame stutters.
+    if out_fps is not None:
+        i = np.arange(out_n_frames) * fps / out_fps
+        if frame_interpolation:
+            out_0 = out[np.floor(i).astype(int)]
+            out_1 = out[np.ceil(i).astype(int)]
+            t = (i % 1)[:, None, None, None]
+            out = (1 - t) * out_0 + t * out_1
+        else:
+            out = out[np.round(i).astype(int)]
+
+    if n_frames == 1:
+        out = np.squeeze(out)
+    return out, vid_size, fps
+
+def crop_and_scale(
+    img: ArrayLike, res: Tuple[int], interpolation=cv2.INTER_CUBIC, zoom: float = 0.0
+) -> ArrayLike:
+    """Takes an image, a resolution, and a zoom factor as input, returns the
+    zoomed/cropped image."""
+    in_res = (img.shape[1], img.shape[0])
+    r_in = in_res[0] / in_res[1]
+    r_out = res[0] / res[1]
+
+    # Crop to correct aspect ratio
+    if r_in > r_out:
+        padding = int(round((in_res[0] - r_out * in_res[1]) / 2))
+        img = img[:, padding:-padding]
+    if r_in < r_out:
+        padding = int(round((in_res[1] - in_res[0] / r_out) / 2))
+        img = img[padding:-padding]
+
+    # Apply zoom
+    if zoom != 0:
+        pad_x = round(int(img.shape[1] * zoom))
+        pad_y = round(int(img.shape[0] * zoom))
+        img = img[pad_y:-pad_y, pad_x:-pad_x]
+
+    # Resize image
+    img = cv2.resize(img, res, interpolation=interpolation)
+
+    return img
+
+def write_to_avi(frames: np.ndarray, out_file, fps=30):
+    out = cv2.VideoWriter(str(out_file), cv2.VideoWriter_fourcc(*'MJPG'), fps, (frames.shape[2], frames.shape[1]))
+    for frame in frames:
+        out.write(frame.astype(np.uint8))
+    out.release()

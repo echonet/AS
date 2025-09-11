@@ -19,9 +19,6 @@ import pydicom
     Predictions will be saved as csv files in the `predictions` directory.
     The view-specific predictions files will be named `predictions_{view}.csv`.
     The ensemble study-level predictions file will be named `ensemble_predictions.csv`.
-    The predictions file has 3 columns:
-        1. filename - name of the DICOM file
-        2. prediction - sigmoided output of the model
 """
 
 
